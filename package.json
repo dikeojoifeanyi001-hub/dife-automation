@@ -2,7 +2,7 @@
   "name": "dife-automation",
   "version": "1.0.0",
   "description": "DIFE Automation System - Background jobs for risk monitoring and billing",
-  "main": "src/index.js",
+  "main": "src/worker.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "node src/index.js"
@@ -11,7 +11,6 @@
   "author": "Dike Ojo Ifeanyi",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.0",
-    "node-cron": "^3.0.3"
+    "axios": "^1.6.0"
   }
 }
