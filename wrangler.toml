@@ -1,0 +1,9 @@
+name = "dife-automation"
+main = "src/worker.js"
+compatibility_date = "2024-04-15"
+
+[triggers]
+crons = ["*/2 * * * *", "*/5 * * * *"]
+
+[vars]
+API_URL = "https://dife-saas-api-production.up.railway.app/api"
