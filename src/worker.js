@@ -1,5 +1,17 @@
-// DIFE Automation System - Cloudflare Worker
+/**
+ * DIFE Automation System - Cloudflare Worker
+ * 
+ * Features:
+ * - /health - Health check endpoint
+ * - /run-jobs - Main automation endpoint (returns full results)
+ * - /run/risk - Legacy risk monitor endpoint
+ * - /run/billing - Legacy billing endpoint
+ * - Scheduled cron jobs (every 5 minutes)
+ */
 
+const { runAllJobs } = require('./runAllJobs');
+
+// Helper function for logging
 function log(level, message) {
   console.log(JSON.stringify({
     timestamp: new Date().toISOString(),
@@ -12,7 +24,7 @@ async function runRiskMonitor(env) {
   try {
     log('INFO', 'Starting Risk Monitor Job...');
     
-    const response = await fetch(`${env.API_URL}/routes`, {
+    const response = await fetch(`${env.API_URL || 'https://dife-saas-api-production.up.railway.app/api'}/routes`, {
       headers: {
         'Authorization': `Bearer ${env.AUTH_TOKEN}`
       }
@@ -52,7 +64,7 @@ async function runBillingJob(env) {
   try {
     log('INFO', 'Starting Billing Job...');
     
-    const response = await fetch(`${env.API_URL}/routes`, {
+    const response = await fetch(`${env.API_URL || 'https://dife-saas-api-production.up.railway.app/api'}/routes`, {
       headers: {
         'Authorization': `Bearer ${env.AUTH_TOKEN}`
       }
@@ -100,12 +112,28 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     
-    if (url.pathname === '/health') {
-      return new Response(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }), {
+    // MAIN DEBUG ENDPOINT - PROVES YOUR SYSTEM WORKS
+    if (url.pathname === '/run-jobs') {
+      log('INFO', 'Manual job trigger via /run-jobs endpoint');
+      const result = await runAllJobs(env);
+      
+      return new Response(JSON.stringify(result, null, 2), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
     
+    // Health check endpoint
+    if (url.pathname === '/health') {
+      return new Response(JSON.stringify({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        service: 'DIFE Automation System'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Legacy endpoints (kept for backward compatibility)
     if (url.pathname === '/run/risk') {
       const result = await runRiskMonitor(env);
       return new Response(JSON.stringify(result), {
@@ -120,20 +148,32 @@ export default {
       });
     }
     
+    // Root endpoint
     return new Response('DIFE Automation System Running', { status: 200 });
   },
   
+  // AUTOMATIC JOB RUNNER - Runs on schedule
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     
+    log('INFO', `========================================`);
     log('INFO', `Scheduled job triggered: ${cron}`);
     
-    if (cron === '*/2 * * * *') {
-      await runRiskMonitor(env);
-    }
+    // Run the complete job suite
+    const result = await runAllJobs(env);
     
-    if (cron === '*/5 * * * *') {
-      await runBillingJob(env);
+    log('INFO', `Scheduled job completed:`);
+    log('INFO', `  - Routes Checked: ${result.routesChecked}`);
+    log('INFO', `  - High Risk Routes: ${result.highRiskRoutes}`);
+    log('INFO', `  - Total Billing: $${result.billingAmount}`);
+    log('INFO', `========================================`);
+    
+    // If high-risk routes were found, log an extra alert
+    if (result.highRiskRoutes > 0) {
+      log('ALERT', `🚨 ${result.highRiskRoutes} HIGH RISK ROUTES DETECTED! Action required.`);
+      result.highRiskDetails.forEach(route => {
+        log('ALERT', `  - Route ${route.id}: ${route.origin} → ${route.destination} (Risk: ${route.risk_score})`);
+      });
     }
   }
 };
